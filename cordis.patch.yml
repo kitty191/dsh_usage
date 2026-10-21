@@ -1,0 +1,15 @@
+# dsh-usage — bundle patch.
+#
+# A bundle patch is a list of Loader patch entries. This one inserts the
+# plugin's own row into the composition:
+#
+#   id      unique row id inside the whole composition
+#   name    package name resolved from the profile's node_modules
+#   config  passed to apply(ctx, config) as the second argument
+#
+# Later profile-level layers can override this row by targeting the same id.
+
+- insert:
+    - id: dsh-usage
+      name: dsh-usage
+      config: {}
