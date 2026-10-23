@@ -177,6 +177,7 @@ test('the section renders five cards with formatted values', async () => {
   assert.match(text, /8 天/)
   assert.match(text, /2026-10-15 → 2026-10-22/)
   assert.match(text, /2 天/)
+  assert.match(text, /不含已删除会话/)
 })
 
 test('cards are laid out as two rows, 3 + 2', async () => {
