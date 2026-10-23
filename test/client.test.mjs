@@ -13,6 +13,7 @@ function createElement(type, props, ...children) {
 
 function createHookHarness() {
   const states = []
+  const refs = []
   let effects = []
   let index = 0
   return {
@@ -27,6 +28,11 @@ function createHookHarness() {
             states[slot] = typeof next === 'function' ? next(states[slot]) : next
           },
         ]
+      },
+      useRef(initial) {
+        const slot = index++
+        if (!(slot in refs)) refs[slot] = { current: initial }
+        return refs[slot]
       },
       useEffect(fn) {
         effects[index++] = fn
@@ -266,6 +272,12 @@ test('the heatmap renders 12 months of cells and the view tabs', async () => {
   }
   const cells = collect(ready, (node) => node.props && node.props.className === 'dshUsageHeat-cell')
   assert.equal(cells.length, renderedDays + 5) // + 5 legend swatches
+
+  const grids = collect(
+    ready,
+    (node) => node.props && typeof node.props.style === 'object' && /^repeat\(\d+, minmax\(0, 1fr\)\)$/.test(node.props.style.gridTemplateColumns || ''),
+  )
+  assert.ok(grids.length >= 2, 'month row and day grid must share a responsive template')
 
   const target = cells.find((cell) => String(cell.props['aria-label']).startsWith('2026-10-18'))
   assert.ok(target, 'the 2026-10-18 cell must be rendered')
