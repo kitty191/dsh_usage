@@ -103,19 +103,20 @@ export function heatLevel(value, { view = 'daily', total = 0 } = {}) {
 
 > **实现与上面的方案不同**：实测深色主题下 `--dsw-alias-brand-primary` 是很深的藏蓝（`neutral-bluish-1000`），铺在深色面板上几乎看不见，热力图会显示成一片灰。
 >
-> 现在的实现：颜色用 `--dsw-static-blue-450`（#4d93f8，明暗主题都有定义），分档用固定透明度。
+> 现在的实现：颜色用 `--dsw-static-blue-450`（#4d93f8，明暗主题都有定义），并给**两套透明度**——浅色主题需要更实的填充，否则低档位在白底上几乎看不见。
 
-| 档位 | 透明度 |
-|---|---|
-| 1 | 0.22 |
-| 2 | 0.40 |
-| 3 | 0.60 |
-| 4 | 0.80 |
-| 5 | 1.00 |
+| 档位 | 浅色透明度 | 深色透明度 |
+|---|---|---|
+| 1 | 0.38 | 0.22 |
+| 2 | 0.55 | 0.40 |
+| 3 | 0.72 | 0.60 |
+| 4 | 0.88 | 0.80 |
+| 5 | 1.00 | 1.00 |
 
-- 空白格：`--dsw-alias-bg-layer-2` 打底 + 1px `--dsw-alias-border-l2` 内描边。
+- 实现方式：`HEAT_CSS` 里用 `[data-level]` 规则，深色覆盖走 `body[data-ds-dark-theme]`；**不要改回行内透明度**，否则主题切换失效。
+- 空白格：`--dsw-alias-bg-layer-2` 打底 + 1px `--dsw-alias-border-l3` 内描边（l3 比 l2 更明显，浅色下才看得见网格）。
 - 悬停格：1px `--dsw-alias-border-l3` 外描边。
-- 改颜色只需要改 `LEVEL_OPACITY` 与那个蓝色变量；不再有按档位的 CSS 规则。
+- 提示框背景在明暗主题下都是深色，所以文字**固定白色**（`#ffffff`）。不要用主题的前景色变量——深色主题下 `label-primary-foreground` 反而是深色。
 
 - 空白格：`--heat-0` 打底 + 1px `--dsw-alias-border-l2` 描边，保证边界可见。
 - 悬停格：2px `--dsw-alias-border-l3` 描边，不改变底色。
