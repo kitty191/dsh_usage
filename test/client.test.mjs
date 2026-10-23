@@ -54,6 +54,7 @@ function evaluateFactory(definition, react = plainReact()) {
 
 function textOf(node) {
   if (typeof node === 'string') return node
+  if (Array.isArray(node)) return node.map(textOf).join(' ')
   if (!node || typeof node !== 'object') return ''
   return (node.children || []).map(textOf).join(' ')
 }
@@ -116,12 +117,20 @@ test('the section renders a loading status first', () => {
   assert.equal(element.props.role, 'status')
 })
 
-test('the section shows the formatted total after fetch resolves', async () => {
+test('the section renders five cards with formatted values', async () => {
   const harness = createHookHarness()
   const body = {
     ok: true,
     updatedAt: '2026-10-22T13:46:45.656Z',
     totals: { tokens: 1234567, sessions: 3 },
+    insights: {
+      peakDay: { day: '2026-10-18', tokens: 48073103 },
+      longestTurn: { ms: 1384000, sessionId: 'session-a', turn: 2, startedAt: 0, endedAt: 1 },
+      streak: {
+        longest: { days: 8, from: '2026-10-15', to: '2026-10-22' },
+        current: { days: 2, from: '2026-10-21', to: '2026-10-22' },
+      },
+    },
   }
   const definition = loadBundle(async () => ({
     ok: true,
@@ -135,9 +144,98 @@ test('the section shows the formatted total after fetch resolves', async () => {
   await settle()
 
   const ready = exportsObj.UsageSection()
+  const text = textOf(ready)
   assert.equal(ready.props['data-usage-section'], 'summary')
-  assert.match(textOf(ready), /1,234,567/)
-  assert.match(textOf(ready), /3 个会话/)
+
+  for (const label of ['累计 Token', '单日峰值', '最长单轮', '最长连续', '当前连续']) {
+    assert.match(text, new RegExp(label))
+  }
+  assert.match(text, /1,234,567/)
+  assert.match(text, /48,073,103/)
+  assert.match(text, /2026-10-18/)
+  assert.match(text, /23分4秒/)
+  assert.match(text, /8 天/)
+  assert.match(text, /2026-10-15 → 2026-10-22/)
+  assert.match(text, /2 天/)
+})
+
+test('cards are laid out as two rows, 3 + 2', async () => {
+  const harness = createHookHarness()
+  const body = {
+    ok: true,
+    updatedAt: '2026-10-22T13:46:45.656Z',
+    totals: { tokens: 1, sessions: 1 },
+    insights: {
+      peakDay: null,
+      longestTurn: null,
+      streak: { longest: { days: 0 }, current: { days: 0 } },
+    },
+  }
+  const definition = loadBundle(async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(body),
+  }))
+  const exportsObj = evaluateFactory(definition, harness.React)
+
+  exportsObj.UsageSection()
+  harness.runEffect()
+  await settle()
+
+  const ready = exportsObj.UsageSection()
+  const cards = ready.children[1].children[0]
+
+  assert.equal(cards.length, 5)
+  // Array.from runs in this realm, so the comparison is not across realms.
+  assert.deepEqual(
+    Array.from(cards, (card) => card.props.style.gridColumn),
+    ['span 2', 'span 2', 'span 2', 'span 3', 'span 3'],
+  )
+  assert.equal(cards[0].props.style.borderLeft, undefined)
+  assert.equal(cards[1].props.style.borderLeft, '1px solid var(--dsw-alias-border-l2)')
+  assert.equal(cards[3].props.style.borderLeft, undefined)
+  assert.equal(cards[4].props.style.borderLeft, '1px solid var(--dsw-alias-border-l2)')
+})
+
+test('formatting helpers follow the product rules', () => {
+  const exportsObj = evaluateFactory(loadBundle())
+
+  assert.equal(exportsObj.formatTokens(250620928), '250,620,928')
+  assert.equal(exportsObj.formatTokens(undefined), '—')
+
+  assert.equal(exportsObj.formatDuration(1_384_000), '23分4秒')
+  assert.equal(exportsObj.formatDuration(60_000), '1分')
+  assert.equal(exportsObj.formatDuration(3_600_000), '1小时')
+  assert.equal(exportsObj.formatDuration(500), '1秒')
+  assert.equal(exportsObj.formatDuration(null), '—')
+
+  assert.equal(exportsObj.formatDayRange({ from: '2026-01-01', to: '2026-01-01' }), '2026-01-01')
+  assert.equal(exportsObj.formatDayRange({ from: '2026-01-01', to: '2026-01-02' }), '2026-01-01 → 2026-01-02')
+  assert.equal(exportsObj.formatDayRange(null), '暂无')
+})
+
+test('a report without insights still renders without crashing', async () => {
+  const harness = createHookHarness()
+  const definition = loadBundle(async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify({
+      ok: true,
+      updatedAt: '2026-10-22T13:46:45.656Z',
+      totals: { tokens: 0, sessions: 0 },
+    }),
+  }))
+  const exportsObj = evaluateFactory(definition, harness.React)
+
+  exportsObj.UsageSection()
+  harness.runEffect()
+  await settle()
+
+  const ready = exportsObj.UsageSection()
+  const text = textOf(ready)
+  assert.equal(ready.props['data-usage-section'], 'summary')
+  assert.match(text, /0 天/)
+  assert.match(text, /—/)
 })
 
 test('the section shows the server error instead of a blank page', async () => {

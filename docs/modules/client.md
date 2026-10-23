@@ -4,7 +4,7 @@
 
 ## 一句话职责
 
-在 DSH 设置页注册一个 **"Usage"** 分区，读取宿主接口并显示累计 Token。M4 阶段只显示一个数字，用来证明客户端链路是通的。
+在 DSH 设置页注册一个 **"Usage"** 分区，读取宿主接口并显示 5 张指标卡：累计 Token、单日峰值、最长单轮、最长连续、当前连续。
 
 ---
 
@@ -99,10 +99,33 @@ fetch('/dsh-usage/stats.json')
 | 状态 | 界面 |
 |---|---|
 | loading | `role="status"`："正在统计用量…" |
-| ready | 累计 Token 完整数字（千分位）＋ 会话数 ＋ 更新时间 |
+| ready | 5 张指标卡（完整数字／时长／天数）＋ 底部数据来源与更新时间 |
 | error | `role="alert"`：错误标题＋具体原因，绝不白屏 |
 
-数字格式 `toLocaleString('en-US')`：`230,906,504`。这是产品明确要求——不用"亿/万"，精确到个位。
+数字格式 `toLocaleString('en-US')`：`250,620,928`。这是产品明确要求——不用"亿/万"，精确到个位。
+
+---
+
+## 指标卡（M5）
+
+| 卡片 | 数据来源 | 副标题 |
+|---|---|---|
+| 累计 Token | `totals.tokens` | 会话数 |
+| 单日峰值 | `insights.peakDay.tokens` | 峰值日期 |
+| 最长单轮 | `insights.longestTurn.ms` | "单轮用时" |
+| 最长连续 | `insights.streak.longest.days` | 起止日期 |
+| 当前连续 | `insights.streak.current.days` | 起止日期 |
+
+**布局**：两行，共用一个圆角容器。第一行三张（累计、峰值、最长单轮），第二行两张（最长连续、当前连续）；每张卡按 6 列网格占 2 格或 3 格，卡片之间用 1px 边线分隔。
+
+> 为什么不用一行 5 张：完整 token 数字太长，5 列会把 `48,073,103` 截成 `48,07...`。两行是数据格式倒逼出来的布局。
+
+**格式化规则**（`formatTokens` / `formatDuration` / `formatDayRange`）：
+
+- Token：完整整数 + 千分位，不缩写、不用"亿/万"。
+- 时长：≥1 小时 → `1小时5分`；≥1 分钟 → `23分4秒`（整分省略秒）；否则 `8秒`。
+- 日期区间：同一天只显示一个日期，否则 `2026-10-15 → 2026-10-22`。
+- 缺数据：Token/时长显示 `—`，天数显示 `0 天`，区间显示 `暂无`。
 
 ---
 
@@ -116,6 +139,8 @@ var(--dsw-alias-label-secondary)
 var(--dsw-alias-label-tertiary)
 ```
 
+卡片容器使用 `--dsw-alias-bg-layer-1` 打底、`--dsw-alias-border-l2` 描边与分隔线，深色/浅色主题自动切换。
+
 M6 的热力图会再引入 `--dsw-alias-brand-primary` 与 `bg-layer-2`，见 [heatmap-color.md](../heatmap-color.md)。
 
 ---
@@ -127,7 +152,9 @@ M6 的热力图会再引入 `--dsw-alias-brand-primary` 与 `bg-layer-2`，见 [
 | 接口 500 | 显示 `body.error` |
 | 鉴权失败（HTML 响应） | 解析失败 → 显示 `HTTP 401/403` |
 | 网络中断 | `fetch` 抛错 → 显示错误文本 |
-| `totals.tokens` 缺失 | 显示 0，不显示 `NaN` |
+| `totals.tokens` 缺失 | 显示 `—`，不显示 `NaN` |
+| `insights` 整块缺失 | 指标卡照常渲染：峰值/单轮显示 `—`，连续天数显示 `0 天` |
+| `longestTurn` 为空 | 显示 `—`，不显示 `NaN分NaN秒` |
 | 组件卸载后请求才返回 | `alive` 标志阻止 `setState` |
 | 插件停用 | `ctx.effect` 清理分区注册 |
 
@@ -135,7 +162,7 @@ M6 的热力图会再引入 `--dsw-alias-brand-primary` 与 `bg-layer-2`，见 [
 
 ## 测试覆盖
 
-`test/client.test.mjs`（8 个）：bundle 注册、导出结构、分区注册与清理、加载态、成功态（断言 `1,234,567` 与"3 个会话"）、错误态、清单字段。
+`test/client.test.mjs`（10 个）：bundle 注册、导出结构、分区注册与清理、加载态、五卡渲染（数字/时长/天数/日期区间）、格式化函数边界、缺失 insights 的降级、错误态、清单字段。
 
 测试用 `node:vm` 在裸上下文里执行 bundle，用假 React 提供 `useState/useEffect`，所以不需要浏览器。
 
@@ -145,5 +172,6 @@ M6 的热力图会再引入 `--dsw-alias-brand-primary` 与 `bg-layer-2`，见 [
 
 - **分区 id `usage` 是跨版本契约**：以后改布局不要改 id，否则用户设置导航项会重复或丢失。
 - **组件退出时务必取消后续 setState**，否则 HMR 后会警告或闪回旧数据。
-- M5/M6 会把这里的内容扩展成指标卡与热力图，但**取数方式与错误契约保持不动**。
-- 真机验证仍未完成：客户端能否被 DSH 加载、分区能否出现在导航里，需要在安装后确认。
+- M6 会把这里扩展成热力图，但**取数方式与错误契约保持不动**。
+- **真机验证已完成（M4）**：分区出现在设置导航，显示 `250,620,928`，与 `curl /dsh-usage/stats.json` 的返回值一致。
+- 客户端改动不需要重启 Harness：把 `lib/client.js` 同步到 profile 的 `node_modules/dsh-usage/lib/client.js`，刷新页面即可加载新 bundle。
