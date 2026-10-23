@@ -116,6 +116,10 @@ test/          46 个测试，5 个测试文件
 - [架构与数据流](docs/ARCHITECTURE.md)
 - [开发笔记](docs/DEV_NOTES.md)
 
+## 致谢
+
+本项目的部分代码修复、测试与文档由 OpenAI Codex 协助完成。
+
 ## License
 
 MIT，见 [LICENSE](LICENSE)。
