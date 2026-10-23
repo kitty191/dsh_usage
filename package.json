@@ -1,6 +1,6 @@
 {
   "name": "dsh-usage",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "DSH Usage: token activity heatmap and usage insights, installed as a Settings section.",
   "type": "module",
@@ -8,12 +8,18 @@
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
-    "cordis.patch.yml"
+    "locale",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
   ],
+  "icon": "./icon.svg",
   "scripts": {
     "test": "node --test"
   },

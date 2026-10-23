@@ -25,6 +25,8 @@ index.js  →  scan.mjs  →  stats.mjs  →  service.mjs  →  client.js
 
 | 文档 | 内容 |
 |---|---|
+| [ARCHITECTURE.md](../ARCHITECTURE.md) | 架构、数据流、关键决策与失败边界 |
+| [DEV_NOTES.md](../DEV_NOTES.md) | 踩坑记录：zstd、profile 路径、主题变量、数据口径 |
 | [heatmap-color.md](../heatmap-color.md) | 热力图颜色规格：阈值、色阶、图例、边界 |
 
 ## 写作规则
