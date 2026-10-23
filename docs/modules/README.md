@@ -19,7 +19,7 @@ index.js  →  scan.mjs  →  stats.mjs  →  service.mjs  →  client.js
 | [lib/scan.mjs](../../lib/scan.mjs) | [scan.md](scan.md) | ✅ 已完成 |
 | [lib/stats.mjs](../../lib/stats.mjs) | [stats.md](stats.md) | ✅ 已完成 |
 | [lib/service.mjs](../../lib/service.mjs) | [service.md](service.md) | ✅ 已完成 |
-| lib/client.js | client.md | ⬜ M4 |
+| [lib/client.js](../../lib/client.js) | [client.md](client.md) | ✅ 已完成 |
 
 ## 设计文档
 
