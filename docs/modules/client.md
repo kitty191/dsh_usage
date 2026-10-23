@@ -4,7 +4,7 @@
 
 ## 一句话职责
 
-在 DSH 设置页注册一个 **"Usage"** 分区，读取宿主接口并显示 5 张指标卡：累计 Token、单日峰值、最长单轮、最长连续、当前连续。
+在 DSH 设置页注册一个 **"Usage"** 分区：5 张指标卡 + 最近 12 个月的 Token 活动热力图（每天/每周/累计三种视图）。
 
 ---
 
@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
 - 不能写 JSX，元素要用 `h(type, props, ...children)`；
 - 没有类型检查。
 
-换来的是**零构建步骤**：改完直接生效，读代码也不需要先"编译"一遍。界面变大（M6 热力图）时可以重新评估是否引入 esbuild。
+换来的是**零构建步骤**：改完直接生效，读代码也不需要先"编译"一遍。如果以后界面继续变大，再评估是否引入 esbuild。
 
 ---
 
@@ -99,7 +99,7 @@ fetch('/dsh-usage/stats.json')
 | 状态 | 界面 |
 |---|---|
 | loading | `role="status"`："正在统计用量…" |
-| ready | 5 张指标卡（完整数字／时长／天数）＋ 底部数据来源与更新时间 |
+| ready | 5 张指标卡 + 12 个月热力图 + 图例 + 底部数据来源与更新时间 |
 | error | `role="alert"`：错误标题＋具体原因，绝不白屏 |
 
 数字格式 `toLocaleString('en-US')`：`250,620,928`。这是产品明确要求——不用"亿/万"，精确到个位。
@@ -129,6 +129,22 @@ fetch('/dsh-usage/stats.json')
 
 ---
 
+## 热力图（M6）
+
+- **窗口**：最近 12 个月（53 周），每列一周，周一到周日共 7 格。
+- **三种视图**：
+  - 每天：每格一天，按日阈值上色。
+  - 每周：每列一格，值为该周总和，按周阈值（日阈值 ×7）上色。
+  - 累计总量：每格显示窗口内累计值，按窗口总量比例分档——这是唯一的相对刻度。
+- **阈值**的权威定义在 [heatmap-color.md](../heatmap-color.md)；代码里只出现在 `DAILY_THRESHOLDS` / `WEEKLY_THRESHOLDS`。
+- **悬停**：自定义 tooltip，显示 `2026-10-18 · 48,073,103 tokens`，跟随鼠标且不拦截点击。
+- **未来日期**：渲染为不可见格，不响应悬停。
+- **图例**：5 个色块 + 阈值文字；累计视图显示"窗口内累计比例"。
+- **颜色**：`--dsw-static-blue-450` + 固定透明度 0.22 / 0.40 / 0.60 / 0.80 / 1.00。深色主题的 `brand-primary` 实际是深藏蓝，不能用于填色（详见 [heatmap-color.md](../heatmap-color.md)）。
+- **溢出**：热力图包在自己的横向滚动容器里；窄窗口只滚动图表，不会把整页撑宽或裁切卡片。
+
+---
+
 ## 主题
 
 所有颜色来自 CSS 变量，不写死：
@@ -141,7 +157,7 @@ var(--dsw-alias-label-tertiary)
 
 卡片容器使用 `--dsw-alias-bg-layer-1` 打底、`--dsw-alias-border-l2` 描边与分隔线，深色/浅色主题自动切换。
 
-M6 的热力图会再引入 `--dsw-alias-brand-primary` 与 `bg-layer-2`，见 [heatmap-color.md](../heatmap-color.md)。
+热力图使用 `--dsw-alias-brand-primary` 与 `--dsw-alias-bg-layer-2` 混色，深色主题通过 `body[data-ds-dark-theme]` 提高混色比例。完整色阶见 [heatmap-color.md](../heatmap-color.md)。
 
 ---
 
@@ -162,7 +178,7 @@ M6 的热力图会再引入 `--dsw-alias-brand-primary` 与 `bg-layer-2`，见 [
 
 ## 测试覆盖
 
-`test/client.test.mjs`（10 个）：bundle 注册、导出结构、分区注册与清理、加载态、五卡渲染（数字/时长/天数/日期区间）、格式化函数边界、缺失 insights 的降级、错误态、清单字段。
+`test/client.test.mjs`（14 个）：bundle 注册、导出结构、分区注册与清理、加载态、五卡渲染、两行布局跨度、热力图格子数量与悬停、色阶边界（日/周/累计）、周与累计聚合、格式化函数边界、缺数据降级、错误态、清单字段。
 
 测试用 `node:vm` 在裸上下文里执行 bundle，用假 React 提供 `useState/useEffect`，所以不需要浏览器。
 
@@ -172,6 +188,7 @@ M6 的热力图会再引入 `--dsw-alias-brand-primary` 与 `bg-layer-2`，见 [
 
 - **分区 id `usage` 是跨版本契约**：以后改布局不要改 id，否则用户设置导航项会重复或丢失。
 - **组件退出时务必取消后续 setState**，否则 HMR 后会警告或闪回旧数据。
-- M6 会把这里扩展成热力图，但**取数方式与错误契约保持不动**。
+- **阈值只写在 `DAILY_THRESHOLDS` / `WEEKLY_THRESHOLDS` 两处**；改阈值等于改变全部历史颜色，必须同步改 [heatmap-color.md](../heatmap-color.md) 与测试。
+- 热力图格子使用 `dshUsageHeat-cell` 类名，颜色规则通过 `<style>` 注入；不要改成内联颜色，否则深色主题分档会失效。
 - **真机验证已完成（M4）**：分区出现在设置导航，显示 `250,620,928`，与 `curl /dsh-usage/stats.json` 的返回值一致。
 - 客户端改动不需要重启 Harness：把 `lib/client.js` 同步到 profile 的 `node_modules/dsh-usage/lib/client.js`，刷新页面即可加载新 bundle。

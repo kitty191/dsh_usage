@@ -38,6 +38,8 @@
 
 图例在每周视图下显示这组周阈值，不显示日阈值。
 
+**呈现方式**：每周视图只画一行，每列一格代表一周；不会把同一周的颜色重复画在 7 个格子里。
+
 ## 3. 累计总量视图：相对渐变
 
 累计值随账号使用时长增长，固定阈值没有意义。这一档是**唯一的相对缩放**：
@@ -46,7 +48,8 @@
 level = Math.min(5, Math.max(1, Math.ceil(5 * cumulative / total)))
 ```
 
-- `total` 是区间末的总量；比值 20% 以内为第 1 档，100% 为第 5 档。
+- `total` 是 **12 个月窗口内的总量**。客户端只有窗口内的 `days`，拿不到账号全周期的前缀，所以累计从窗口起点开始算。
+- 比值 20% 以内为第 1 档，100% 为第 5 档。
 - 效果：越靠近现在颜色越深，表达"积累过程"。
 - 图例在这一档显示"少 → 多"的相对刻度，**不显示具体数字**，避免误解为绝对用量。
 
@@ -76,7 +79,7 @@ export function heatLevel(value, { view = 'daily', total = 0 } = {}) {
 
 ---
 
-## 5. 颜色定义
+## 5. 颜色定义（最初方案，实现已替换）
 
 全部从 DSH 主题变量派生，不写死颜色。
 
@@ -98,7 +101,21 @@ export function heatLevel(value, { view = 'daily', total = 0 } = {}) {
 --heat-4: color-mix(in oklab, var(--dsw-alias-brand-primary) 78%, var(--dsw-alias-bg-layer-2));
 ```
 
-深色主题的生效选择器（`data-ds-dark-theme` 或 `.dark`）在 M6 实测确认后再落定，这里只规定色值比例。
+> **实现与上面的方案不同**：实测深色主题下 `--dsw-alias-brand-primary` 是很深的藏蓝（`neutral-bluish-1000`），铺在深色面板上几乎看不见，热力图会显示成一片灰。
+>
+> 现在的实现：颜色用 `--dsw-static-blue-450`（#4d93f8，明暗主题都有定义），分档用固定透明度。
+
+| 档位 | 透明度 |
+|---|---|
+| 1 | 0.22 |
+| 2 | 0.40 |
+| 3 | 0.60 |
+| 4 | 0.80 |
+| 5 | 1.00 |
+
+- 空白格：`--dsw-alias-bg-layer-2` 打底 + 1px `--dsw-alias-border-l2` 内描边。
+- 悬停格：1px `--dsw-alias-border-l3` 外描边。
+- 改颜色只需要改 `LEVEL_OPACITY` 与那个蓝色变量；不再有按档位的 CSS 规则。
 
 - 空白格：`--heat-0` 打底 + 1px `--dsw-alias-border-l2` 描边，保证边界可见。
 - 悬停格：2px `--dsw-alias-border-l3` 描边，不改变底色。
@@ -120,15 +137,15 @@ export function heatLevel(value, { view = 'daily', total = 0 } = {}) {
 2026-10-18 · 48,073,103 tokens
 ```
 
-- 每格是 `<button type="button">`，带 `aria-label`（同上文案），支持 Tab 聚焦。
-- 提示框用主题变量，不用第三方 tooltip 库。
-- 颜色不是唯一信息渠道：数字始终可读。
+- 每格是 `<div>`，带 `aria-label`；**不设置 Tab 焦点**——371 个格子会成为键盘陷阱。
+- 悬停用自定义 tooltip，颜色取自主题变量，不引入第三方库。
+- 颜色不是唯一信息渠道：悬停即可读到完整数字。
 
 **网格**
 
 - 列 = 周，行 = 周一…周日（中国习惯，周一起始）。
 - 单元格 11px × 11px，间距 3px，圆角 2px。
-- 只渲染到"今天"为止；未来日期不渲染。
+- 只渲染到"今天"为止；未来日期渲染为不可见格，不响应悬停。
 - 月份刻度标在每月第一周所在列的上方。
 
 ---
@@ -146,7 +163,9 @@ export function heatLevel(value, { view = 'daily', total = 0 } = {}) {
 
 ---
 
-## 8. 验收用的边界测试（M6）
+## 8. 验收用的边界测试（M6 已实现）
+
+实现见 `lib/client.js` 的 `heatLevel`；测试见 `test/client.test.mjs`。
 
 ```text
 9,999,999      → 1
