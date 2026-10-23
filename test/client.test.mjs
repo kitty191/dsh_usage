@@ -271,7 +271,12 @@ test('the heatmap renders 12 months of cells and the view tabs', async () => {
     for (const cell of column.cells) if (cell) renderedDays++
   }
   const cells = collect(ready, (node) => node.props && node.props.className === 'dshUsageHeat-cell')
-  assert.equal(cells.length, renderedDays + 5) // + 5 legend swatches
+  assert.equal(cells.length, renderedDays)
+  const swatches = collect(
+    ready,
+    (node) => node.props && String(node.props.className || '').includes('dshUsageHeat-swatch'),
+  )
+  assert.equal(swatches.length, 5)
 
   const grids = collect(
     ready,
@@ -335,12 +340,49 @@ test('buildHeatmap aggregates weeks and cumulative values', () => {
   assert.equal(week.cell.value, 5000000)
   assert.equal(week.cell.level, 1)
 
+  const labelColumns = Object.keys(weekly.labelByColumn).map(Number).sort((a, b) => a - b)
+  for (let index = 1; index < labelColumns.length; index++) {
+    assert.ok(labelColumns[index] - labelColumns[index - 1] >= 3, 'month labels must not collide')
+  }
+
   const cumulative = buildHeatmap(report, 'cumulative', todayKey)
   const day = cumulative.columns
     .flatMap((column) => column.cells)
     .find((cell) => cell && cell.key === '2026-10-19')
   assert.equal(day.display, 53073103)
   assert.equal(cumulative.total, 53073103)
+})
+
+test('month labels keep November when the leading October is too short', () => {
+  const { buildHeatmap } = evaluateFactory(loadBundle())
+  const expected = ['11月', '12月', '1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月']
+
+  for (const view of ['daily', 'weekly', 'cumulative']) {
+    const heat = buildHeatmap({ days: {} }, view, '2026-10-23')
+    assert.deepEqual(Array.from(Object.values(heat.labelByColumn)), expected)
+    const november = Object.keys(heat.labelByColumn).find((key) => heat.labelByColumn[key] === '11月')
+    assert.ok(heat.columns[november].cells.some((cell) => cell?.key === '2025-11-01'))
+  }
+})
+
+test('month labels include a new month starting in the final partial week', () => {
+  const { buildHeatmap } = evaluateFactory(loadBundle())
+
+  for (const today of ['2026-11-01', '2026-12-01', '2027-01-01']) {
+    const heat = buildHeatmap({ days: {} }, 'daily', today)
+    const lastColumn = heat.columns.length - 1
+    assert.equal(heat.labelByColumn[lastColumn], Number(today.slice(5, 7)) + '月')
+    assert.ok(heat.columns[lastColumn].cells.some((cell) => cell?.key === today))
+  }
+})
+
+test('month labels stay in calendar order across a leap year boundary', () => {
+  const { buildHeatmap } = evaluateFactory(loadBundle())
+  const heat = buildHeatmap({ days: {} }, 'daily', '2028-02-29')
+  assert.deepEqual(
+    Array.from(Object.values(heat.labelByColumn)),
+    ['3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月', '1月', '2月'],
+  )
 })
 
 test('formatting helpers follow the product rules', () => {

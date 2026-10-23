@@ -176,7 +176,8 @@ fetch('/dsh-usage/stats.json')
 - **悬停**：自定义 tooltip，显示 `2026-10-18 · 48,073,103 tokens`，跟随鼠标且不拦截点击。
 - **未来日期**：渲染为不可见格，不响应悬停。
 - **图例**：只有 少 / 5 个色块 / 多；不显示数字阈值，避免信息过载（具体数字靠悬停查看）。
-- **颜色**：`--dsw-static-blue-450` + 两套 CSS 透明度（浅色 0.38/0.55/0.72/0.88/1，深色 0.22/0.40/0.60/0.80/1），通过 `body[data-ds-dark-theme]` 切换。深色主题的 `brand-primary` 实际是深藏蓝，不能用于填色（详见 [heatmap-color.md](../heatmap-color.md)）。
+- **颜色**：`HEAT_COLORS` 定义两套不透明蓝色色阶，通过 `body[data-ds-dark-theme]` 切换。浅色主题用量越高颜色越深，深色主题用量越高颜色越亮（详见 [heatmap-color.md](../heatmap-color.md)）。
+- **月份**：扫描每列的全部日期，在包含每月 1 日的那一列标记新月份。若开头残缺月份的标签会碰到下一个月份，只省略开头的旧标签；保留后续月份和最右端刚开始的月份。
 - **宽度**：53 列按容器宽度自适应（`repeat(N, minmax(0, 1fr))`），正常窗口一屏看完 12 个月，最新数据在右端。
 - **窄窗口**：容器最小宽度 520px，放不下时才横向滚动，并自动滚到最新一端（`scrollLeft = scrollWidth`），不用手动找今天。
 
@@ -184,7 +185,7 @@ fetch('/dsh-usage/stats.json')
 
 ## 主题
 
-所有颜色来自 CSS 变量，不写死：
+文字、面板和边框使用宿主 CSS 变量：
 
 ```css
 var(--dsw-alias-label-primary)
@@ -194,7 +195,7 @@ var(--dsw-alias-label-tertiary)
 
 卡片容器使用 `--dsw-alias-bg-layer-1` 打底、`--dsw-alias-border-l2` 描边与分隔线，深色/浅色主题自动切换。
 
-热力图使用 `--dsw-alias-brand-primary` 与 `--dsw-alias-bg-layer-2` 混色，深色主题通过 `body[data-ds-dark-theme]` 提高混色比例。完整色阶见 [heatmap-color.md](../heatmap-color.md)。
+热力图的有用量格子使用 `HEAT_COLORS` 中的独立蓝色色阶，深色主题通过 `body[data-ds-dark-theme]` 切换。零用量格子仍跟随宿主面板与边框变量。完整色阶见 [heatmap-color.md](../heatmap-color.md)。
 
 ---
 
@@ -215,7 +216,7 @@ var(--dsw-alias-label-tertiary)
 
 ## 测试覆盖
 
-`test/client.test.mjs`（16 个）：bundle 注册、导出结构、分区注册与清理、加载态、五卡渲染、两行布局跨度、热力图格子数量与悬停、色阶边界（日/周/累计）、周与累计聚合、洞察列表、刷新绕过缓存、格式化函数边界、缺数据降级、错误态、清单字段。
+`test/client.test.mjs`（19 个）：bundle 注册、导出结构、分区注册与清理、加载态、五卡渲染、两行布局跨度、热力图格子数量与悬停、色阶边界（日/周/累计）、周与累计聚合、11 月刻度回归、最后一列跨月、闰年月份顺序、洞察列表、刷新绕过缓存、格式化函数边界、缺数据降级、错误态、清单字段。
 
 测试用 `node:vm` 在裸上下文里执行 bundle，用假 React 提供 `useState/useEffect`，所以不需要浏览器。
 
@@ -226,7 +227,7 @@ var(--dsw-alias-label-tertiary)
 - **分区 id `usage` 是跨版本契约**：以后改布局不要改 id，否则用户设置导航项会重复或丢失。
 - **组件退出时务必取消后续 setState**，否则 HMR 后会警告或闪回旧数据。
 - **阈值只写在 `DAILY_THRESHOLDS` / `WEEKLY_THRESHOLDS` 两处**；改阈值等于改变全部历史颜色，必须同步改 [heatmap-color.md](../heatmap-color.md) 与测试。
-- 热力图格子使用 `dshUsageHeat-cell` 类名；颜色是行内「蓝色 + 透明度」，不依赖深色主题变量。
+- 热力图格子使用 `dshUsageHeat-cell` 类名；颜色由 `HEAT_COLORS` 生成主题 CSS，图例与网格共用同一套色阶。
 - **刷新失败不能清空旧数据**：`refreshError` 单独存，只有初始加载失败才进错误页。
 - **真机验证已完成（M4）**：分区出现在设置导航，显示 `250,620,928`，与 `curl /dsh-usage/stats.json` 的返回值一致。
 - 客户端改动不需要重启 Harness：把 `lib/client.js` 同步到 profile 的 `node_modules/dsh-usage/lib/client.js`，刷新页面即可加载新 bundle。

@@ -5,7 +5,7 @@
 
 ## 一句话
 
-颜色代表**当天的 token 用量**，用量越多颜色越深。每天视图用**固定阈值**，不随最近最高值漂移。
+每天视图的颜色代表**当天的 token 用量**：浅色主题用量越多蓝色越深，深色主题用量越多蓝色越亮。每天视图用**固定阈值**，不随最近最高值漂移。
 
 ---
 
@@ -48,9 +48,9 @@
 level = Math.min(5, Math.max(1, Math.ceil(5 * cumulative / total)))
 ```
 
-- `total` 是 **12 个月窗口内的总量**。客户端只有窗口内的 `days`，拿不到账号全周期的前缀，所以累计从窗口起点开始算。
+- `total` 是 **12 个月窗口内的总量**。客户端从报告的 `days` 中截取当前窗口的数据，累计从窗口起点开始算。
 - 比值 20% 以内为第 1 档，100% 为第 5 档。
-- 效果：越靠近现在颜色越深，表达"积累过程"。
+- 效果：累计越多，浅色主题蓝色越深，深色主题蓝色越亮，表达"积累过程"。
 - 图例在这一档显示"少 → 多"的相对刻度，**不显示具体数字**，避免误解为绝对用量。
 
 ---
@@ -75,51 +75,28 @@ export function heatLevel(value, { view = 'daily', total = 0 } = {}) {
 }
 ```
 
-阈值只写在**一处**。改阈值等于改变全部颜色，属于视觉破坏性变更。
+实际阈值集中定义在 `lib/client.js` 的 `DAILY_THRESHOLDS` / `WEEKLY_THRESHOLDS`，上面代码仅为算法示例。改阈值会改变历史用量对应的色阶，需要同步更新文档与测试。
 
 ---
 
-## 5. 颜色定义（最初方案，实现已替换）
+## 5. 颜色定义
 
-全部从 DSH 主题变量派生，不写死颜色。
+使用两套不透明蓝色色阶，色值集中在 `lib/client.js` 的 `HEAT_COLORS`。浅色主题用量越高蓝色越深，深色主题用量越高蓝色越亮。
 
-```css
-/* 浅色主题 */
---heat-0: var(--dsw-alias-bg-layer-2);                              /* 空白 */
---heat-1: color-mix(in oklab, var(--dsw-alias-brand-primary) 12%, var(--dsw-alias-bg-layer-2));
---heat-2: color-mix(in oklab, var(--dsw-alias-brand-primary) 30%, var(--dsw-alias-bg-layer-2));
---heat-3: color-mix(in oklab, var(--dsw-alias-brand-primary) 50%, var(--dsw-alias-bg-layer-2));
---heat-4: color-mix(in oklab, var(--dsw-alias-brand-primary) 72%, var(--dsw-alias-bg-layer-2));
---heat-5: var(--dsw-alias-brand-primary);
-```
-
-```css
-/* 深色主题：提高混色比例，避免低档位在深底上看不见 */
---heat-1: color-mix(in oklab, var(--dsw-alias-brand-primary) 20%, var(--dsw-alias-bg-layer-2));
---heat-2: color-mix(in oklab, var(--dsw-alias-brand-primary) 38%, var(--dsw-alias-bg-layer-2));
---heat-3: color-mix(in oklab, var(--dsw-alias-brand-primary) 58%, var(--dsw-alias-bg-layer-2));
---heat-4: color-mix(in oklab, var(--dsw-alias-brand-primary) 78%, var(--dsw-alias-bg-layer-2));
-```
-
-> **实现与上面的方案不同**：实测深色主题下 `--dsw-alias-brand-primary` 是很深的藏蓝（`neutral-bluish-1000`），铺在深色面板上几乎看不见，热力图会显示成一片灰。
->
-> 现在的实现：颜色用 `--dsw-static-blue-450`（#4d93f8，明暗主题都有定义），并给**两套透明度**——浅色主题需要更实的填充，否则低档位在白底上几乎看不见。
-
-| 档位 | 浅色透明度 | 深色透明度 |
+| 档位 | 浅色主题 | 深色主题 |
 |---|---|---|
-| 1 | 0.38 | 0.22 |
-| 2 | 0.55 | 0.40 |
-| 3 | 0.72 | 0.60 |
-| 4 | 0.88 | 0.80 |
-| 5 | 1.00 | 1.00 |
+| 1 | `#c9ddfc` | `#294261` |
+| 2 | `#8bb7f2` | `#365f8f` |
+| 3 | `#4a8be3` | `#4484c4` |
+| 4 | `#2365c7` | `#62a8ea` |
+| 5 | `#164398` | `#a0d2ff` |
 
-- 实现方式：`HEAT_CSS` 里用 `[data-level]` 规则，深色覆盖走 `body[data-ds-dark-theme]`；**不要改回行内透明度**，否则主题切换失效。
-- 空白格：`--dsw-alias-bg-layer-2` 打底 + 1px `--dsw-alias-border-l3` 内描边（l3 比 l2 更明显，浅色下才看得见网格）。
-- 悬停格：1px `--dsw-alias-border-l3` 外描边。
-- 提示框背景在明暗主题下都是深色，所以文字**固定白色**（`#ffffff`）。不要用主题的前景色变量——深色主题下 `label-primary-foreground` 反而是深色。
+旧版对同一个 `#4d93f8` 调整透明度，浅色主题即使用量很高也只能达到较浅的蓝色；独立色阶让高用量能达到深蓝，且不受面板底色影响。深色主题也不用宿主的 `brand-primary`，因为该变量在深色面板上对比不足。
 
-- 空白格：`--heat-0` 打底 + 1px `--dsw-alias-border-l2` 描边，保证边界可见。
-- 悬停格：2px `--dsw-alias-border-l3` 描边，不改变底色。
+- 实现方式：`HEAT_CSS` 由色阶数组生成 `[data-level]` 规则，深色覆盖走 `body[data-ds-dark-theme]`。图例与格子共用色阶，主题切换不需要重新请求统计。
+- 空白格：`--dsw-alias-bg-layer-2` 打底 + 1px `--dsw-alias-border-l3` 内描边。
+- 悬停格：1px `--dsw-alias-border-l3` 外描边，不改变底色。
+- 提示框背景在明暗主题下都是深色，文字固定白色（`#ffffff`）。
 
 ---
 
@@ -133,14 +110,14 @@ export function heatLevel(value, { view = 'daily', total = 0 } = {}) {
 
 数字阈值不再显示在界面上——要查具体数字时，悬停格子即可。
 
-**悬停 / 键盘聚焦**
+**悬停**
 
 ```text
 2026-10-18 · 48,073,103 tokens
 ```
 
 - 每格是 `<div>`，带 `aria-label`；**不设置 Tab 焦点**——371 个格子会成为键盘陷阱。
-- 悬停用自定义 tooltip，颜色取自主题变量，不引入第三方库。
+- 悬停用自定义 tooltip，背景取自主题变量、文字固定白色，不引入第三方库。
 - 颜色不是唯一信息渠道：悬停即可读到完整数字。
 
 **网格**
@@ -149,7 +126,7 @@ export function heatLevel(value, { view = 'daily', total = 0 } = {}) {
 - 单元格高度 10px，宽度随列宽自适应；间距 2px，圆角 2px。
 - 53 列按容器宽度平分（`repeat(N, minmax(0, 1fr))`），正常情况下 12 个月一屏可见；容器最小 520px，更窄时横向滚动并自动停在最右（最新）一端。
 - 只渲染到"今天"为止；未来日期渲染为不可见格，不响应悬停。
-- 月份刻度标在每月第一周所在列的上方。
+- 月份刻度标在包含每月 1 日的列上方，即使 1 日不是周一也会标记。开头的残缺月份若与下个月相距不足三列，只省略开头旧标签，保留后续月份；最后一列刚进入新月份时也显示刻度。
 
 ---
 
