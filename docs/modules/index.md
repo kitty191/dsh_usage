@@ -4,7 +4,7 @@
 
 ## 一句话职责
 
-插件在 DSH 宿主进程里的入口：声明依赖、注册路由、把清理函数交给框架。当前只有一条探针路由 `/dsh-usage/ping`。
+插件在 DSH 宿主进程里的入口：声明依赖、注册两条只读路由、把清理函数交给框架。
 
 ---
 
@@ -14,23 +14,23 @@
 |---|---|---|
 | `inject` | `['webServer']` | 告诉 Cordis：`webServer` 服务就绪后再调用 `apply` |
 | `apply(ctx)` | 函数 | 插件唯一入口；在这里注册所有资源 |
-| `createPingHandler()` | `() => (req, res) => void` | 返回路由处理器，便于单独测试 |
-| `PING_PATH` | `'/dsh-usage/ping'` | 路由路径，公开契约 |
+| `createPingHandler()` | `() => (req, res) => void` | 探针路由处理器 |
+| `createStatsHandler(service)` | `(service) => (req, res) => Promise<void>` | 统计路由处理器；失败转 500 |
+| `PING_PATH` | `'/dsh-usage/ping'` | 探针路径 |
+| `STATS_PATH` | `'/dsh-usage/stats.json'` | 统计接口路径 |
 | `PLUGIN_NAME` | `'dsh-usage'` | 插件标识 |
 
 ## 请求流程
 
 ```text
-curl / 浏览器
-   │  GET /dsh-usage/ping
-   ▼
-ctx.webServer（DSH 的 HTTP 服务）
-   │  按 exact 路由匹配
-   ▼
-createPingHandler() 返回的函数
-   │  200 + JSON { ok, name, version, time }
-   ▼
-响应
+GET /dsh-usage/ping
+  └─ createPingHandler() → 200 { ok, name, version, time }
+
+GET /dsh-usage/stats.json
+  └─ createStatsHandler() → service.getStats({ force })
+       ├─ 命中缓存 → 200（cached: true）
+       ├─ 未命中   → scan + aggregate → 200（cached: false）
+       └─ 出错     → 500 { ok: false, error }
 ```
 
 ---
@@ -71,14 +71,16 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 | `webServer` 服务不存在 | `inject` 不满足，`apply` 不会被调用 |
 | 同一路径重复注册 | `webServer.register` 抛错（路由冲突是配置错误） |
 | 请求未知路径 | 由 DSH 路由表回答 404，与本插件无关 |
-| 没有鉴权 | ping 不含任何用户数据，所以暂不拦截；统计路由必须加栅栏（M3） |
+| 没有鉴权 | 两条路由都只读，统计接口只返回聚合数字（不含会话标题或正文） |
+| 统计接口失败 | 500 + `{ ok:false, error }`，前端显示错误态而不是空白页 |
+| 跨站读取 | 不返回 CORS 头，浏览器跨源页面读不到响应体 |
 | `package.json` 读不到 | 模块加载时抛错，插件激活失败 |
 
 ---
 
 ## 测试覆盖
 
-`test/ping.test.mjs`（4 个）：声明依赖、注册一条 exact 路由、处理器返回正确 JSON、卸载后路由消失。
+`test/ping.test.mjs`（6 个）：声明依赖、注册两条 exact 路由、ping 返回身份信息、stats 转发 refresh 参数、stats 失败转 500、卸载后两条路由都消失。
 
 测试用一个只实现 `webServer` 和 `effect` 的假 ctx。**如果以后代码偷偷依赖第三个服务，测试会立刻失败**——这是刻意的约束。
 
@@ -86,7 +88,8 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 
 ## 修改须知
 
-- M3 会在同一个 `apply` 里增加 `/dsh-usage/stats.json`。ping 路由保留，用于快速判断"插件是否活着"。
+- `/dsh-usage/stats.json` 已在 M3 加入。ping 路由保留，用于区分"插件没加载"和"统计链路坏了"。
+- 服务实例在 `apply` 里创建一次，随插件生命周期存在；不要把它放到模块顶层（热重载会重建）。
 - **不要在模块顶层放可变状态**。热重载会重新执行模块，顶层状态会丢；状态应放在 `apply` 内部，并随 `ctx.effect` 释放。
 - 路由路径是公开契约，改了要同步 README 和前端代码。
 

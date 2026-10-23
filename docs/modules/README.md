@@ -18,8 +18,14 @@ index.js  →  scan.mjs  →  stats.mjs  →  service.mjs  →  client.js
 | [lib/index.js](../../lib/index.js) | [index.md](index.md) | ✅ 已完成 |
 | [lib/scan.mjs](../../lib/scan.mjs) | [scan.md](scan.md) | ✅ 已完成 |
 | [lib/stats.mjs](../../lib/stats.mjs) | [stats.md](stats.md) | ✅ 已完成 |
-| lib/service.mjs | service.md | ⬜ M3 |
+| [lib/service.mjs](../../lib/service.mjs) | [service.md](service.md) | ✅ 已完成 |
 | lib/client.js | client.md | ⬜ M4 |
+
+## 设计文档
+
+| 文档 | 内容 |
+|---|---|
+| [heatmap-color.md](../heatmap-color.md) | 热力图颜色规格：阈值、色阶、图例、边界 |
 
 ## 写作规则
 
