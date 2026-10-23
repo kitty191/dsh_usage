@@ -85,8 +85,9 @@ async function settle() {
 const baseBody = {
   ok: true,
   updatedAt: '2026-10-22T13:46:45.656Z',
-  totals: { tokens: 1234567, sessions: 3 },
+  totals: { tokens: 1234567, sessions: 3, turns: 12, steps: 34 },
   days: {},
+  models: [{ model: 'deepseek-flash', tokens: 1234567 }],
   insights: {
     peakDay: { day: '2026-10-18', tokens: 48073103 },
     longestTurn: { ms: 1384000, sessionId: 'session-a', turn: 2, startedAt: 0, endedAt: 1 },
@@ -94,6 +95,8 @@ const baseBody = {
       longest: { days: 8, from: '2026-10-15', to: '2026-10-22' },
       current: { days: 2, from: '2026-10-21', to: '2026-10-22' },
     },
+    reasoning: [{ effort: 'max', requests: 10, share: 1 }],
+    tools: [{ name: 'run_code', calls: 42, share: 0.8 }],
   },
 }
 
@@ -178,6 +181,53 @@ test('the section renders five cards with formatted values', async () => {
   assert.match(text, /2026-10-15 → 2026-10-22/)
   assert.match(text, /2 天/)
   assert.match(text, /不含已删除会话/)
+})
+
+test('the insights list summarises effort, model, counts and tools', async () => {
+  const { ready } = await renderReady()
+  const text = textOf(ready)
+
+  assert.match(text, /洞察/)
+  assert.match(text, /最常用推理强度/)
+  assert.match(text, /极高 · 100%/)
+  assert.match(text, /常用模型/)
+  assert.match(text, /deepseek-flash/)
+  assert.match(text, /会话 \/ 轮次 \/ 步数/)
+  assert.match(text, /3 \/ 12 \/ 34/)
+  assert.match(text, /调用最多的工具/)
+  assert.match(text, /run_code · 42 次/)
+})
+
+test('the refresh button bypasses the cache', async () => {
+  const urls = []
+  let tokens = 1234567
+  const harness = createHookHarness()
+  const definition = loadBundle(async (url) => {
+    urls.push(url)
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ...baseBody, totals: { ...baseBody.totals, tokens } }),
+    }
+  })
+  const exportsObj = evaluateFactory(definition, harness.React)
+
+  harness.render(exportsObj.UsageSection)
+  harness.runEffects()
+  await settle()
+  assert.equal(urls[0], '/dsh-usage/stats.json')
+
+  const ready = harness.render(exportsObj.UsageSection)
+  const refreshButton = collect(ready, (node) => node.type === 'button' && textOf(node) === '刷新')[0]
+  assert.ok(refreshButton, 'the refresh button must exist')
+
+  tokens = 7654321
+  refreshButton.props.onClick()
+  await settle()
+
+  const refreshed = harness.render(exportsObj.UsageSection)
+  assert.equal(urls[1], '/dsh-usage/stats.json?refresh=1')
+  assert.match(textOf(refreshed), /7,654,321/)
 })
 
 test('cards are laid out as two rows, 3 + 2', async () => {
